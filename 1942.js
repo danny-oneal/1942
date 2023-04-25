@@ -9,7 +9,6 @@ spriteSheet.src = "./images/1942_sprite_sheet.png";
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-console.log(spriteSheet);
 ctx.drawImage(spriteSheet, 200, 200);
 
 class Player {
@@ -52,7 +51,44 @@ class Player {
   }
 }
 
-const player = new Player();
+class Bullet {
+  sx = 91;
+  sy = 84;
+  swidth = 4;
+  sheight = 11;
+  width = this.swidth * SPRITE_SCALE;
+  height = this.sheight * SPRITE_SCALE;
+
+  position = {
+    x: player.position.x + player.width / 2,
+    y: player.position.y
+  };
+
+  velocity = {
+    x: 0,
+    y: -10
+  };
+
+  draw() {
+    // ctx.drawImage(spriteSheet, this.position.x, this.position.y);
+    ctx.drawImage(
+      spriteSheet,
+      this.sx,
+      this.sy,
+      this.swidth,
+      this.sheight,
+      this.position.x,
+      this.position.y,
+      this.width,
+      this.height
+    );
+  }
+
+  update() {
+    this.draw();
+    this.position.y += this.velocity.y;
+  }
+}
 
 const keys = {
   a: {
@@ -77,50 +113,45 @@ function animate() {
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   player.update();
+  bullets.forEach((bullet, index) => {
+    if (bullet.position.y + bullet.height <= 0) {
+      bullets.shift();
+    } else {
+      bullet.update();
+    }
+  });
   handleInput();
 }
 
 function handleInput() {
-  if (keys.a.pressed && player.position.x >= 0) {
+  if (keySet.has("a") && player.position.x >= 0) {
     player.velocity.x = -PLAYER_SPEED;
-  } else if (keys.d.pressed && player.position.x + player.width <= canvas.width) {
+  } else if (keySet.has("d") && player.position.x + player.width <= canvas.width) {
     player.velocity.x = PLAYER_SPEED;
   } else {
     player.velocity.x = 0;
   }
 
-  if (keys.w.pressed) {
+  if (keySet.has("w")) {
     player.velocity.y = -PLAYER_SPEED;
-  } else if (keys.s.pressed) {
+  } else if (keySet.has("s")) {
     player.velocity.y = PLAYER_SPEED;
   } else {
     player.velocity.y = 0;
   }
 }
 
-animate();
-
 addEventListener("keydown", ({ key }) => {
   switch (key) {
     case "a":
-      console.log("left");
-      keys.a.pressed = true;
-      break;
     case "d":
-      console.log("right");
-      keys.d.pressed = true;
-      break;
     case "w":
-      console.log("up");
-      keys.w.pressed = true;
-      break;
     case "s":
-      console.log("down");
-      keys.s.pressed = true;
+      keySet.add(key);
       break;
     case " ":
-      console.log("space");
-      keys.space.pressed = true;
+      bullets.push(new Bullet());
+      console.log(bullets);
       break;
   }
 });
@@ -128,24 +159,16 @@ addEventListener("keydown", ({ key }) => {
 addEventListener("keyup", ({ key }) => {
   switch (key) {
     case "a":
-      console.log("left");
-      keys.a.pressed = false;
-      break;
     case "d":
-      console.log("right");
-      keys.d.pressed = false;
-      break;
     case "w":
-      console.log("up");
-      keys.w.pressed = false;
-      break;
     case "s":
-      console.log("down");
-      keys.s.pressed = false;
-      break;
     case " ":
-      console.log("space");
-      keys.space.pressed = false;
+      keySet.delete(key);
       break;
   }
 });
+
+const player = new Player();
+const bullets = [];
+const keySet = new Set();
+animate();
