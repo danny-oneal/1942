@@ -90,7 +90,7 @@ class Entity {
         this.isDying = true;
         this.deathTimestamp = Date.now();
     }
-    update() {
+    update(deltaTime) {
         this.draw();
         this.position.x += this.velocity.x;
         this.position.y += this.velocity.y;
@@ -118,10 +118,19 @@ class Hero extends Entity {
         this.isInvincible = false;
         this.bulletArray = [];
         this.bulletTimeStamp = 0;
+        this.explosionIdx = 0;
+        this.explosionFrames = [
+            { sx: 5, sy: 104, swidth: 27, sheight: 23 },
+            { sx: 35, sy: 103, swidth: 32, sheight: 28 },
+            { sx: 69, sy: 100, swidth: 34, sheight: 32 },
+            { sx: 105, sy: 100, swidth: 32, sheight: 33 },
+            { sx: 140, sy: 101, swidth: 32, sheight: 31 },
+            { sx: 175, sy: 103, swidth: 31, sheight: 26 }
+        ];
     }
     shoot() {
         if (Date.now() - this.bulletTimeStamp > 100) {
-            const bullet = new Bullet({ x: this.getX() + this.getWidth() / 2, y: this.getY() });
+            const bullet = new Bullet(91, 84, 4, 11, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
             bullet.setVelocityY(-10);
             this.bulletArray.push(bullet);
             this.bulletTimeStamp = Date.now();
@@ -130,19 +139,34 @@ class Hero extends Entity {
     getBullets() {
         return this.bulletArray;
     }
-    update() {
-        super.update();
-        this.bulletArray.forEach((bullet, index) => {
-            bullet.update();
-            if (bullet.getY() < 0) {
-                this.bulletArray.splice(index, 1);
+    update(deltaTime) {
+        if (!this.isDying) {
+            super.update(deltaTime);
+            this.bulletArray.forEach((bullet, index) => {
+                bullet.update(deltaTime);
+                if (bullet.getY() < 0) {
+                    this.bulletArray.splice(index, 1);
+                }
+            });
+        }
+        else {
+            if (this.explosionIdx < this.explosionFrames.length) {
+                const explosionFrame = this.explosionFrames[this.explosionIdx];
+                ctx.drawImage(spriteSheet, explosionFrame.sx, explosionFrame.sy, explosionFrame.swidth, explosionFrame.sheight, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+                if (Date.now() - this.getDeathTimestamp() > 200) {
+                    this.explosionIdx++;
+                    this.setDeathTimestamp(Date.now());
+                }
             }
-        });
+            else {
+                this.setIsDead(true);
+            }
+        }
     }
 }
 class Bullet extends Entity {
-    constructor(position) {
-        super(91, 84, 4, 11, position);
+    constructor(sx, sy, swidth, sheight, position) {
+        super(sx, sy, swidth, sheight, position);
     }
 }
 class Enemy extends Entity {
@@ -160,17 +184,35 @@ class Enemy extends Entity {
             { sx: 256, sy: 78, swidth: 18, sheight: 17 }
         ];
     }
-    shoot() {
-        if (Date.now() - this.bulletTimeStamp > 100) {
-            const bullet = new Bullet({ x: this.getX() + this.getWidth() / 2, y: this.getY() });
-            bullet.setVelocityY(-10);
+    shoot(hero) {
+        if (Date.now() - this.bulletTimeStamp > 1000) {
+            const bullet = new Bullet(74, 90, 6, 4, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
+            const dx = hero.getX() - this.getX();
+            const dy = hero.getY() - this.getY();
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            const unitVector = { x: dx / magnitude, y: dy / magnitude };
+            const bulletVelocity = 10;
+            const bulletVector = { x: unitVector.x * bulletVelocity, y: unitVector.y * bulletVelocity };
+            const bulletVelocityX = bulletVector.x;
+            const bulletVelocityY = bulletVector.y;
+            bullet.setVelocityX(bulletVelocityX);
+            bullet.setVelocityY(bulletVelocityY);
             this.bulletArray.push(bullet);
             this.bulletTimeStamp = Date.now();
         }
     }
-    update() {
+    getBullets() {
+        return this.bulletArray;
+    }
+    update(deltaTime) {
         if (!this.isDying) {
-            super.update();
+            super.update(deltaTime);
+            this.bulletArray.forEach((bullet, index) => {
+                bullet.update(deltaTime);
+                // if (bullet.getY() < 0) {
+                //   this.bulletArray.splice(index, 1);
+                // }
+            });
         }
         else {
             if (this.explosionIdx < this.explosionFrames.length) {
@@ -202,10 +244,10 @@ class World {
         else {
             this.player.setVelocityX(0);
         }
-        if (keySet.has("w")) {
+        if (keySet.has("w") && this.player.getY() >= 0) {
             this.player.setVelocityY(-PLAYER_SPEED);
         }
-        else if (keySet.has("s")) {
+        else if (keySet.has("s") && this.player.getY() + this.player.getHeight() <= canvas.height) {
             this.player.setVelocityY(PLAYER_SPEED);
         }
         else {
@@ -221,19 +263,21 @@ class World {
                     y: 0
                 });
                 enemy.setVelocityY(5);
+                enemy.setVelocityX(getRandInt(-5, 5));
                 this.enemies.push(enemy);
                 lastEnemySpawned = Date.now();
             }
         }
     }
     update(deltaTime) {
-        this.player.update();
+        this.player.update(deltaTime);
         this.enemies.forEach((enemy, index) => {
-            if (enemy.getIsDead()) {
+            if (enemy.getIsDead() || !isInBounds(enemy)) {
                 this.enemies.splice(index, 1);
             }
             else {
-                enemy.update();
+                enemy.update(deltaTime);
+                enemy.shoot(this.player);
             }
         });
         this.handleInput();
@@ -252,6 +296,16 @@ class World {
                     return true;
                 }
             });
+            enemy.getBullets().some((bullet, bulletIndex) => {
+                if (this.player.isCollidingWith(bullet)) {
+                    // allow bullet to pass through player if it's already dying
+                    if (!this.player.getIsDying()) {
+                        enemy.getBullets().splice(bulletIndex, 1);
+                        this.player.die();
+                    }
+                    return true;
+                }
+            });
         });
     }
 }
@@ -265,3 +319,12 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
+function isInBounds(entity) {
+    return (entity.getX() >= 0 &&
+        entity.getX() + entity.getWidth() <= canvas.width &&
+        entity.getY() >= 0 &&
+        entity.getY() + entity.getHeight() <= canvas.height);
+}
+function getRandInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}

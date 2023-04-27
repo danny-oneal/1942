@@ -39,14 +39,14 @@ addEventListener("keyup", ({ key }) => {
 });
 
 class Entity {
-  private velocity: { x: number; y: number };
+  private velocity: { x: number; y: number; };
   private width: number;
   private height: number;
   private sx: number;
   private sy: number;
   private swidth: number;
   private sheight: number;
-  private position: { x: number; y: number }
+  private position: { x: number; y: number; };
   protected isDying: boolean = false;
   private isDead: boolean = false;
   private deathTimestamp: number = 0;
@@ -56,7 +56,7 @@ class Entity {
     sy: number,
     swidth: number,
     sheight: number,
-    position: { x: number; y: number }
+    position: { x: number; y: number; }
   ) {
     // set the private variables
     this.sx = sx;
@@ -132,7 +132,7 @@ class Entity {
     this.deathTimestamp = Date.now();
   }
 
-  public update(): void {
+  public update(deltaTime: number): void {
     this.draw();
     this.position.x += this.velocity.x;
     this.position.y += this.velocity.y;
@@ -156,31 +156,40 @@ class Entity {
 interface Shooter {
   bulletArray: Bullet[];
   bulletTimeStamp: number;
-  shoot(): void;
+  shoot(entity: Entity): void;
 }
 
 interface Exploder {
   explosionIdx: number;
-  explosionFrames: { sx: number, sy: number, swidth: number, sheight: number }[];
+  explosionFrames: { sx: number, sy: number, swidth: number, sheight: number; }[];
 }
 
-class Hero extends Entity implements Shooter {
+class Hero extends Entity implements Shooter, Exploder {
   private lives = 3;
   private score = 0;
   private isInvincible = false;
   bulletArray: Bullet[] = [];
   bulletTimeStamp = 0;
+  explosionIdx: number = 0;
+  explosionFrames = [
+    { sx: 5, sy: 104, swidth: 27, sheight: 23 },
+    { sx: 35, sy: 103, swidth: 32, sheight: 28 },
+    { sx: 69, sy: 100, swidth: 34, sheight: 32 },
+    { sx: 105, sy: 100, swidth: 32, sheight: 33 },
+    { sx: 140, sy: 101, swidth: 32, sheight: 31 },
+    { sx: 175, sy: 103, swidth: 31, sheight: 26 }
+  ];
 
   constructor() {
     super(4, 6, 27, 17, {
       x: canvas.width / 2,
       y: canvas.height / 2,
-    })
+    });
   }
 
   shoot(): void {
     if (Date.now() - this.bulletTimeStamp > 100) {
-      const bullet = new Bullet({ x: this.getX() + this.getWidth() / 2, y: this.getY() });
+      const bullet = new Bullet(91, 84, 4, 11, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
       bullet.setVelocityY(-10);
       this.bulletArray.push(bullet);
       this.bulletTimeStamp = Date.now();
@@ -191,22 +200,44 @@ class Hero extends Entity implements Shooter {
     return this.bulletArray;
   }
 
-  public update(): void {
-    super.update();
-    this.bulletArray.forEach((bullet, index) => {
-      bullet.update();
-      if (bullet.getY() < 0) {
-        this.bulletArray.splice(index, 1);
+  public update(deltaTime: number): void {
+    if (!this.isDying) {
+      super.update(deltaTime);
+      this.bulletArray.forEach((bullet, index) => {
+        bullet.update(deltaTime);
+        if (bullet.getY() < 0) {
+          this.bulletArray.splice(index, 1);
+        }
+      });
+    } else {
+      if (this.explosionIdx < this.explosionFrames.length) {
+        const explosionFrame = this.explosionFrames[this.explosionIdx];
+        ctx.drawImage(
+          spriteSheet,
+          explosionFrame.sx,
+          explosionFrame.sy,
+          explosionFrame.swidth,
+          explosionFrame.sheight,
+          this.getX(),
+          this.getY(),
+          this.getWidth(),
+          this.getHeight()
+        );
+
+        if (Date.now() - this.getDeathTimestamp() > 200) {
+          this.explosionIdx++;
+          this.setDeathTimestamp(Date.now());
+        }
+      } else {
+        this.setIsDead(true);
       }
-    });
+    }
   }
-
-
 }
 
 class Bullet extends Entity {
-  constructor(position: { x: number; y: number }) {
-    super(91, 84, 4, 11, position)
+  constructor(sx: number, sy: number, swidth: number, sheight: number, position: { x: number; y: number; }) {
+    super(sx, sy, swidth, sheight, position);
   }
 }
 
@@ -222,22 +253,41 @@ class Enemy extends Entity implements Shooter, Exploder {
     { sx: 237, sy: 78, swidth: 18, sheight: 17 },
     { sx: 256, sy: 78, swidth: 18, sheight: 17 }
   ];
-  constructor(position: { x: number; y: number }) {
-    super(4, 199, 17, 17, position)
+  constructor(position: { x: number; y: number; }) {
+    super(4, 199, 17, 17, position);
   }
 
-  shoot(): void {
-    if (Date.now() - this.bulletTimeStamp > 100) {
-      const bullet = new Bullet({ x: this.getX() + this.getWidth() / 2, y: this.getY() });
-      bullet.setVelocityY(-10);
+  shoot(hero: Entity): void {
+    if (Date.now() - this.bulletTimeStamp > 1000) {
+      const bullet = new Bullet(74, 90, 6, 4, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
+      const dx = hero.getX() - this.getX();
+      const dy = hero.getY() - this.getY();
+      const magnitude = Math.sqrt(dx * dx + dy * dy);
+      const unitVector = { x: dx / magnitude, y: dy / magnitude };
+      const bulletVelocity = 10;
+      const bulletVector = { x: unitVector.x * bulletVelocity, y: unitVector.y * bulletVelocity };
+      const bulletVelocityX = bulletVector.x;
+      const bulletVelocityY = bulletVector.y;
+      bullet.setVelocityX(bulletVelocityX);
+      bullet.setVelocityY(bulletVelocityY);
       this.bulletArray.push(bullet);
       this.bulletTimeStamp = Date.now();
     }
   }
 
-  public update() {
+  public getBullets(): Bullet[] {
+    return this.bulletArray;
+  }
+
+  public update(deltaTime: number) {
     if (!this.isDying) {
-      super.update();
+      super.update(deltaTime);
+      this.bulletArray.forEach((bullet, index) => {
+        bullet.update(deltaTime);
+        // if (bullet.getY() < 0) {
+        //   this.bulletArray.splice(index, 1);
+        // }
+      });
     } else {
       if (this.explosionIdx < this.explosionFrames.length) {
         const explosionFrame = this.explosionFrames[this.explosionIdx];
@@ -277,9 +327,9 @@ class World {
       this.player.setVelocityX(0);
     }
 
-    if (keySet.has("w")) {
+    if (keySet.has("w") && this.player.getY() >= 0) {
       this.player.setVelocityY(-PLAYER_SPEED);
-    } else if (keySet.has("s")) {
+    } else if (keySet.has("s") && this.player.getY() + this.player.getHeight() <= canvas.height) {
       this.player.setVelocityY(PLAYER_SPEED);
     } else {
       this.player.setVelocityY(0);
@@ -296,6 +346,7 @@ class World {
           y: 0
         });
         enemy.setVelocityY(5);
+        enemy.setVelocityX(getRandInt(-5, 5));
         this.enemies.push(enemy);
         lastEnemySpawned = Date.now();
       }
@@ -303,12 +354,13 @@ class World {
   }
 
   public update(deltaTime: number): void {
-    this.player.update();
+    this.player.update(deltaTime);
     this.enemies.forEach((enemy, index) => {
-      if (enemy.getIsDead()) {
+      if (enemy.getIsDead() || !isInBounds(enemy)) {
         this.enemies.splice(index, 1);
       } else {
-        enemy.update();
+        enemy.update(deltaTime);
+        enemy.shoot(this.player);
       }
     });
     this.handleInput();
@@ -327,7 +379,18 @@ class World {
           }
           return true;
         }
-      })
+      });
+
+      enemy.getBullets().some((bullet, bulletIndex) => {
+        if (this.player.isCollidingWith(bullet)) {
+          // allow bullet to pass through player if it's already dying
+          if (!this.player.getIsDying()) {
+            enemy.getBullets().splice(bulletIndex, 1);
+            this.player.die();
+          }
+          return true;
+        }
+      });
     });
   }
 }
@@ -343,3 +406,16 @@ function gameLoop(timestamp: number): void {
 }
 
 requestAnimationFrame(gameLoop);
+
+function isInBounds(entity: Entity): boolean {
+  return (
+    entity.getX() >= 0 &&
+    entity.getX() + entity.getWidth() <= canvas.width &&
+    entity.getY() >= 0 &&
+    entity.getY() + entity.getHeight() <= canvas.height
+  );
+}
+
+function getRandInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}

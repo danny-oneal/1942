@@ -128,7 +128,29 @@ table {
   border-spacing: 0;
 }
 
-/* canvas {
-  width: 1366px;
-  height: 768px;
-} */
+body {
+  margin: 0 auto;
+}
+
+canvas {
+  background-image: url(./images/water.png);
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+#game-screen {
+  display: flex;
+  flex-direction: column;
+  max-width: 1366px;
+  margin: 0 auto;
+}
+
+#stat-board {
+  display: flex;
+  justify-content: space-between;
+}
+
+#stat-board > * {
+  margin: 0 10px;
+  padding: 2rem;
+}
