@@ -5,11 +5,18 @@ const spriteSheet = new Image();
 const SPRITE_SCALE = 2.5;
 const PLAYER_SPEED = 7;
 const keySet = new Set();
+const lives = document.querySelector("#lives");
+const score = document.querySelector("#score");
+const highScore = document.querySelector("#high-score");
 let lastBulletFired = Date.now();
 let lastEnemySpawned = Date.now();
+let paused = false;
 spriteSheet.src = "./images/1942_sprite_sheet.png";
 canvas.height = window.innerHeight;
 canvas.width = window.innerWidth;
+function changeNumber(element, increment) {
+    element.textContent = (parseInt(element.textContent) + increment).toString();
+}
 addEventListener("keydown", ({ key }) => {
     switch (key) {
         case "a":
@@ -18,7 +25,16 @@ addEventListener("keydown", ({ key }) => {
         case "s":
         case " ":
         case "0":
+        case "Enter":
             keySet.add(key);
+            break;
+    }
+});
+addEventListener("keypress", ({ key }) => {
+    switch (key) {
+        case "Enter":
+            paused = !paused;
+            console.log(paused);
             break;
     }
 });
@@ -30,6 +46,7 @@ addEventListener("keyup", ({ key }) => {
         case "s":
         case " ":
         case "0":
+        case "Enter":
             keySet.delete(key);
             break;
     }
@@ -86,6 +103,12 @@ class Entity {
     getIsDying() {
         return this.isDying;
     }
+    setIsDying(isDying) {
+        this.isDying = isDying;
+    }
+    setPosition(position) {
+        this.position = position;
+    }
     die() {
         this.isDying = true;
         this.deathTimestamp = Date.now();
@@ -114,7 +137,6 @@ class Hero extends Entity {
             y: canvas.height / 2,
         });
         this.lives = 3;
-        this.score = 0;
         this.isInvincible = false;
         this.bulletArray = [];
         this.bulletTimeStamp = 0;
@@ -138,6 +160,29 @@ class Hero extends Entity {
     }
     getBullets() {
         return this.bulletArray;
+    }
+    getLives() {
+        return this.lives;
+    }
+    getIsInvincible() {
+        return this.isInvincible;
+    }
+    die() {
+        if (!this.isInvincible) {
+            super.die();
+            this.lives--;
+        }
+    }
+    bringBackToLife() {
+        this.setIsDying(false);
+        this.setIsDead(false);
+        this.setDeathTimestamp(0);
+        this.setPosition({ x: canvas.width / 2, y: canvas.height / 2 });
+        this.explosionIdx = 0;
+        this.isInvincible = true;
+        setTimeout(() => {
+            this.isInvincible = false;
+        }, 2000);
     }
     update(deltaTime) {
         if (!this.isDying) {
@@ -185,7 +230,7 @@ class Enemy extends Entity {
         ];
     }
     shoot(hero) {
-        if (Date.now() - this.bulletTimeStamp > 1000) {
+        if (Date.now() - this.bulletTimeStamp > 1000 && !hero.getIsDead()) {
             const bullet = new Bullet(74, 90, 6, 4, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
             const dx = hero.getX() - this.getX();
             const dy = hero.getY() - this.getY();
@@ -233,6 +278,7 @@ class World {
     constructor() {
         this.player = new Hero();
         this.enemies = [];
+        this.strayBullets = []; // Bullets that live after death or off screen entity
     }
     handleInput() {
         if (keySet.has("a") && this.player.getX() >= 0) {
@@ -256,7 +302,8 @@ class World {
         if (keySet.has(" ")) {
             this.player.shoot();
         }
-        if (keySet.has("0")) {
+        if (keySet.has("Enter")) {
+            console.log("enter");
             if (Date.now() - lastEnemySpawned > 100) {
                 const enemy = new Enemy({
                     x: canvas.width / 2,
@@ -273,6 +320,8 @@ class World {
         this.player.update(deltaTime);
         this.enemies.forEach((enemy, index) => {
             if (enemy.getIsDead() || !isInBounds(enemy)) {
+                this.strayBullets.push(...enemy.getBullets());
+                // console.log(this.strayBullets, enemy);
                 this.enemies.splice(index, 1);
             }
             else {
@@ -280,9 +329,29 @@ class World {
                 enemy.shoot(this.player);
             }
         });
+        this.strayBullets.forEach((bullet, index) => {
+            if (isInBounds(bullet)) {
+                bullet.update(deltaTime);
+            }
+            else {
+                this.strayBullets.splice(index, 1);
+            }
+        });
         this.handleInput();
         this.handleCollisions();
-        // this.handleEnemySpawning();
+        this.handleEnemySpawning();
+    }
+    handleEnemySpawning() {
+        if (Date.now() - lastEnemySpawned > getRandInt(500, 2000) && this.enemies.length < 2) {
+            const enemy = new Enemy({
+                x: getRandInt(0, canvas.width),
+                y: 0
+            });
+            enemy.setVelocityY(getRandInt(5, 7));
+            enemy.setVelocityX(getRandInt(-5, 5));
+            this.enemies.push(enemy);
+            lastEnemySpawned = Date.now();
+        }
     }
     handleCollisions() {
         this.enemies.forEach((enemy, enemyIndex) => {
@@ -292,16 +361,29 @@ class World {
                     if (!enemy.getIsDying()) {
                         this.player.getBullets().splice(bulletIndex, 1);
                         enemy.die();
+                        changeNumber(score, 100);
+                        if (parseInt(highScore.textContent, 0) < parseInt(score.textContent, 0)) {
+                            highScore.textContent = score.textContent;
+                        }
                     }
                     return true;
                 }
             });
             enemy.getBullets().some((bullet, bulletIndex) => {
-                if (this.player.isCollidingWith(bullet)) {
+                if (this.player.isCollidingWith(bullet) && !this.player.getIsDying() && !this.player.getIsInvincible()) {
                     // allow bullet to pass through player if it's already dying
-                    if (!this.player.getIsDying()) {
-                        enemy.getBullets().splice(bulletIndex, 1);
-                        this.player.die();
+                    enemy.getBullets().splice(bulletIndex, 1);
+                    this.player.die();
+                    if (this.player.getLives() === 0) {
+                        changeNumber(lives, -1);
+                        console.log("game over");
+                    }
+                    else {
+                        changeNumber(lives, -1);
+                        console.log("player died");
+                        setTimeout(() => {
+                            this.player.bringBackToLife();
+                        }, 2000);
                     }
                     return true;
                 }
@@ -314,8 +396,10 @@ let lastTime = 0;
 function gameLoop(timestamp) {
     let deltaTime = timestamp - lastTime;
     lastTime = timestamp;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    world.update(deltaTime);
+    if (!paused) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        world.update(deltaTime);
+    }
     requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
