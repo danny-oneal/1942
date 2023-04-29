@@ -1,7 +1,7 @@
 const canvas: HTMLCanvasElement = document.querySelector("canvas")!;
 const ctx: CanvasRenderingContext2D = canvas.getContext("2d")!;
 const spriteSheet: HTMLImageElement = new Image();
-const SPRITE_SCALE: number = 2.5;
+const SPRITE_SCALE: number = 3.5;
 const PLAYER_SPEED: number = 7;
 const keySet = new Set<string>();
 const lives = document.querySelector("#lives")!;
@@ -311,7 +311,7 @@ class Enemy extends Entity implements Shooter, Exploder {
   }
 
   shoot(hero: Entity): void {
-    if (Date.now() - this.bulletTimeStamp > 1000 && !hero.getIsDead()) {
+    if (Date.now() - this.bulletTimeStamp > 2000 && !hero.getIsDead()) {
       const bullet = new Bullet(74, 90, 6, 4, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
       const dx = hero.getX() - this.getX();
       const dy = hero.getY() - this.getY();
@@ -487,6 +487,19 @@ class World {
   }
 }
 
+function isInBounds(entity: Entity): boolean {
+  return (
+    entity.getX() >= 0 &&
+    entity.getX() + entity.getWidth() <= canvas.width &&
+    entity.getY() >= 0 &&
+    entity.getY() + entity.getHeight() <= canvas.height
+  );
+}
+
+function getRandInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
 const world = new World();
 let lastTime = 0;
 function gameLoop(timestamp: number): void {
@@ -500,16 +513,3 @@ function gameLoop(timestamp: number): void {
 }
 
 requestAnimationFrame(gameLoop);
-
-function isInBounds(entity: Entity): boolean {
-  return (
-    entity.getX() >= 0 &&
-    entity.getX() + entity.getWidth() <= canvas.width &&
-    entity.getY() >= 0 &&
-    entity.getY() + entity.getHeight() <= canvas.height
-  );
-}
-
-function getRandInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1) + min);
-}

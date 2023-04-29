@@ -2,7 +2,7 @@
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 const spriteSheet = new Image();
-const SPRITE_SCALE = 2.5;
+const SPRITE_SCALE = 3.5;
 const PLAYER_SPEED = 7;
 const keySet = new Set();
 const lives = document.querySelector("#lives");
@@ -230,7 +230,7 @@ class Enemy extends Entity {
         ];
     }
     shoot(hero) {
-        if (Date.now() - this.bulletTimeStamp > 1000 && !hero.getIsDead()) {
+        if (Date.now() - this.bulletTimeStamp > 2000 && !hero.getIsDead()) {
             const bullet = new Bullet(74, 90, 6, 4, { x: this.getX() + this.getWidth() / 2, y: this.getY() });
             const dx = hero.getX() - this.getX();
             const dy = hero.getY() - this.getY();
@@ -391,6 +391,15 @@ class World {
         });
     }
 }
+function isInBounds(entity) {
+    return (entity.getX() >= 0 &&
+        entity.getX() + entity.getWidth() <= canvas.width &&
+        entity.getY() >= 0 &&
+        entity.getY() + entity.getHeight() <= canvas.height);
+}
+function getRandInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
 const world = new World();
 let lastTime = 0;
 function gameLoop(timestamp) {
@@ -403,12 +412,3 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
-function isInBounds(entity) {
-    return (entity.getX() >= 0 &&
-        entity.getX() + entity.getWidth() <= canvas.width &&
-        entity.getY() >= 0 &&
-        entity.getY() + entity.getHeight() <= canvas.height);
-}
-function getRandInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
-}
